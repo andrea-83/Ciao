@@ -32,7 +32,7 @@ import json
 
 from ciaotools import CiaoThread
 
-class RESTCiao(CiaoThread):
+class RESTserverCiao(CiaoThread):
 	# overriding native asyncore function to handle message received via socket
 	def handle_read(self):
 		#self.logger.debug("Handle READ")

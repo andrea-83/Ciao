@@ -34,7 +34,7 @@ import json, logging
 from Queue import Queue
 import ciaotools
 
-from restciao import RESTCiao
+from restserverciao import RESTserverCiao
 
 # function to handle SIGHUP/SIGTERM
 
@@ -42,25 +42,20 @@ def restserver_handler(conn, shd,logger):
 
 	message = conn.recv(1024)
 	logger.debug("Message %s" % message)
+	reply = ""
 	if message != "" :
-		entry = {"data" : [str(message).rstrip('\r\n')]}
-		socket_queue.put(entry)
-
-	timeout = time.time() + shd["conf"]["params"]["timeout"]   # 1 seconds response timeout
-	while time.time() <= timeout:
-		if not rest_queue.empty():
-			entry = rest_queue.get()
-			if entry['type'] == "response":
-				original_checksum = entry["source_checksum"]
-				if not original_checksum in shd["requests"]:
-					logger.warning("Received response to unknown checksum %s" % original_checksum)
-				original_message = shd["requests"][original_checksum]
-				reply = str(entry['data'][0])
-				logger.debug("data send %s" % reply)
-				conn.send(reply)
-				break
-	conn.send('\r\n')
-	conn.close()
+	 	entry = {"data" : [str(message).rstrip('\r\n')]}
+	 	socket_queue.put(entry)
+		entry = rest_queue.get()
+		if entry['type'] == "response":
+			original_checksum = entry["source_checksum"]
+			if not original_checksum in shd["requests"]:
+				logger.warning("Received response to unknown checksum %s" % original_checksum)
+			original_message = shd["requests"][original_checksum]
+			reply = str(entry['data'][0])
+			logger.debug("data send %s" % reply)
+	conn.send(reply+'\r\n')
+	conn.close()			
 
 def signal_handler(signum, frame):
 	global logger
@@ -77,18 +72,18 @@ shd["basepath"] = os.path.dirname(os.path.abspath(__file__)) + os.sep
 #read configuration
 #TODO
 # verify configuration is a valid JSON
-json_conf = open(shd["basepath"]+"rest.json.conf").read()
+json_conf = open(shd["basepath"]+"restserver.json.conf").read()
 shd["conf"] = json.loads(json_conf)
 #init log
 
-logger = ciaotools.get_logger("rest", logconf=shd["conf"], logdir=shd["basepath"])
+logger = ciaotools.get_logger("restserver", logconf=shd["conf"], logdir=shd["basepath"])
 
 #forking to make process standalone
 try:
 	pid = os.fork()
 	if pid > 0:
 		# Save child pid to file and exit parent process
-		runfile = open("/var/run/rest-ciao.pid", "w")
+		runfile = open("/var/run/restserver-ciao.pid", "w")
 		runfile.write("%d" % pid)
 		runfile.close()
 		sys.exit(0)
@@ -106,7 +101,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 
 shd["requests"] = {}
 
-ciaoclient = RESTCiao(shd, rest_queue, socket_queue)
+ciaoclient = RESTserverCiao(shd, rest_queue, socket_queue)
 ciaoclient.start()
 
 try:

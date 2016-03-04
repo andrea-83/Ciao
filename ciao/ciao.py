@@ -26,7 +26,7 @@
 #
 ###
 
-import io, os, sys, signal
+import io, os, sys, signal, serial
 import logging, json
 from threading import Thread
 import time
@@ -81,25 +81,29 @@ signal.signal(signal.SIGINT, signal_handler) #ctrl+c
 signal.signal(signal.SIGHUP, signal_handler) #SIGHUP - 1
 signal.signal(signal.SIGTERM, signal_handler) #SIGTERM - 15
 
-#acquiring stream for receiving/sending command from MCU
-if settings.use_fakestdin:
-	print "Starting Ciao in DEBUG MODE"
-	logger.debug("Starting Ciao in DEBUG MODE")
-
-	handle = io.open(settings.basepath + "fake.stdin", "r+b")
-else:
-	#disable echo on terminal 
-	enable_echo(sys.stdin, False)
-
-	#allow terminal echo to be enabled back when ciao exits
-	atexit.register(enable_echo, sys.stdin.fileno(), True)
-	handle = io.open(sys.stdin.fileno(), "rb")
-	flush_terminal(sys.stdin)
+baseports = ['/dev/ttyACM']
+baud = 115200
+s = None
+for baseport in baseports :
+	if s :
+		break
+	for i in xrange(0, 8) :
+		try :
+			port = baseport + str(i)
+			s = serial.Serial(port, baud)
+			logger.debug("Open serial port %s" % port)
+			break
+		except :
+			s = None
+			pass
 
 while keepcycling:
 	try:
 		#reading from input device
-		cmd = clean_command(handle.readline())
+		cmd = clean_command(s.readline())
+	except serial.SerialException :
+		keepcycling = False
+		logger.warning("Disconnected (Serial exception)")
 	except KeyboardInterrupt, e:
 		logger.warning("SIGINT received")
 	except IOError, e:
@@ -110,22 +114,22 @@ while keepcycling:
 			connector, action = is_valid_command(cmd)
 			if connector == False:
 				logger.warning("unknown command: %s" % cmd)
-				out(-1, "unknown_command")
+				out(s,-1, "unknown_command")
 			elif connector == "ciao": #internal commands
 				params = cmd.split(";",2)
 				if len(params) != 3:
-					out(-1, "unknown_command")
+					out(s,-1, "unknown_command")
 					continue
 				if action == "r" and params[2] == "status": #read status
-					out(1, "running")
+					out(s,1, "running")
 				elif action == "w" and params[2] == "quit": #stop ciao
-					out(1, "done")
+					out(s,1, "done")
 					keepcycling = False
 			elif not connector in settings.conf['connectors']:
 				logger.warning("unknown connector: %s" % cmd)
-				out(-1, "unknown_connector")
+				out(s,-1, "unknown_connector")
 			else:
-				shd[connector].run(action, cmd)
+				shd[connector].run(s,action, cmd)
 
 		# the sleep is really useful to prevent ciao to "cap" all CPU
 		# this could be increased/decreased (keep an eye on CPU usage)

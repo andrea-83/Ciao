@@ -71,13 +71,14 @@ def get_logger(logname):
 	return logger
 
 # useful function to print out result (to MCU)
-def out(status, message, data = None):
+def out(serial, status, message, data = None):
 	output = [ str(status), str(message) ]
 	if not data is None:
 		data = serialize(data)
 		output.append(data.tostring())
-	#4 (ASCII) means end trasmit (like newline but via a non-printable char)
-	os.write(sys.stdout.fileno(), ";".join(output)+ chr(4))
+	send = ";".join(output)+ chr(4)
+	for i in send:
+	  	serial.write(i)
 
 #COMMAND FUNCTIONS
 def clean_command(command):

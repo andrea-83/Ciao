@@ -105,27 +105,36 @@ class CiaoConnector(object):
 	# put element (hash) identified by "checksum" into stash "destination"
 	# type: out|result|response
 	def stash_put(self, destination, checksum, element):
-		self.stash[checksum] = element
-		self.fifo[destination].append(checksum)
+		if destination == "result":
+			if checksum in self.stash:
+				self.stash[checksum]['result'] = element
+			else:	
+				self.logger.warning("Obtaining result %s for missing checksum (%s)" % (element, checksum))
+		else:
+			self.stash[checksum] = element
+			self.fifo[destination].append(checksum)
 		return
 
 	def has_result(self, checksum):
 		return checksum in self.stash and "result" in self.stash[checksum]
 
-	def get_result(self, checksum):
-		return self.stash[checksum]["result"]
+	def get_result(self, checksum, auto_delete=True):
+		result = self.stash[checksum]["result"]
+		if auto_delete:
+			del self.stash[checksum] 
+		return result
 
-	def run(self, short_action, command):
+	def run(self, serial, short_action, command):
 		#retrieve real action value from short one (e.g. "r" => "read" )
 		#action = settings.allowed_actions[short_action]['map']
 		action = settings.actions_map[short_action]
 
 		if not self.is_registered():
 			self.logger.warning("Connector %s not yet registered" % self.name)
-			out(0, "no_connector")
+			out(serial,0, "no_connector")
 		elif not action in self.implements:
 			self.logger.warning("Connector %s does not implement %s" % (self.name, action))
-			out(0, "no_action")
+			out(serial,0, "no_action")
 		else:
 			required_params = settings.base_params[action]
 			if not "has_params" in self.implements[action] or not self.implements[action]['has_params']:
@@ -141,9 +150,9 @@ class CiaoConnector(object):
 			if self.implements[action]['direction'] == 'in':
 				pos, entry = self.stash_get("in")
 				if pos:
-					out(1, pos, entry["data"])
+					out(serial, 1, pos, entry["data"])
 				else:
-					out(0, "no_message")
+					out(serial, 0, "no_message")
 
 			#action from MCU to the "world"
 			elif self.implements[action]['direction'] == 'out':
@@ -165,7 +174,7 @@ class CiaoConnector(object):
 						"data": data
 					}
 				self.stash_put("out", checksum, result)
-				out(1, "done")
+				out(serial, 1, "done")
 
 			#action is a request from MCU aiming to get a result
 			elif self.implements[action]['direction'] == 'result':
@@ -174,13 +183,17 @@ class CiaoConnector(object):
 				if not checksum in self.stash:
 					result = { 
 						"type": "result",
-						"data": unserialize(message, False)
+						"data": unserialize(message, False),
+						"checksum": checksum
 					}
 					self.stash_put("out", checksum, result)
+					out(serial, 0, "no_result")
 				elif self.has_result(checksum):
-					out(1, checksum, self.get_result(checksum))
+					out(serial, 1, checksum, self.get_result(checksum))
+					if checksum in self.stash:
+						self.logger("non ho cancellato %s" % checksum)
 				else:
-					out(0, "no_result")
+					out(serial, 0, "no_result")
 			else:
 				self.logger.warning("unknown behaviour action: %s" % action)
-				out(0, "no_match")
+				out(serial, 0, "no_match")

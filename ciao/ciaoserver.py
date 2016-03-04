@@ -58,8 +58,6 @@ class CiaoHandler(asyncore.dispatcher_with_send):
 			self.logger.warning("Received empty message (IGNORED)")
 			return
 		self.logger.debug("handle_read (msg) - %s" % message)
-		checksum = get_checksum(message, False)
-		self.logger.debug("handle_read (checksum) - %s" % checksum)
 		if message == "":
 			return
 		try:
@@ -68,8 +66,16 @@ class CiaoHandler(asyncore.dispatcher_with_send):
 		except ValueError, e:
 			self.logger.warning("String not empty but not JSON: %s" % message)
 		else:
-			self.shm[self.name].stash_put("in", checksum, entry)
-			#we have to return output only if client doesn't specify otherwise
+			if "checksum" in entry:
+				self.shm[self.name].stash_put("result", entry['checksum'], entry['data'])
+				checksum = entry['checksum']
+			else:
+				checksum = get_checksum(message, False)
+				self.logger.debug("handle_read (checksum) - %s" % checksum)
+
+				self.shm[self.name].stash_put("in", checksum, entry)
+				
+			# connector MUST receive a feedback from core
 			result = {
 				"status" : 1,
 				"checksum": checksum
@@ -104,14 +110,16 @@ class CiaoHandler(asyncore.dispatcher_with_send):
 
 
 class CiaoServer(asyncore.dispatcher):
+
 	# default host to listen
 	host = "localhost"
 	# default port to listen
 	port = 8900
 	# max client to listen for
 	backlog = 1
+
 	# "bind" status
-	#ready = False
+	# ready = False
 
 	def __init__(self, conf, shm):
 		asyncore.dispatcher.__init__(self)
