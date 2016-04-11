@@ -47,12 +47,18 @@ def http_request(url, method, data, chk):
 		response = conn.getresponse()
 		data = response.read()
 		conn.close()
-		entry = {"checksum": chk, "data" : [str(response.status),str(data)]}
+		if chk:
+			entry = {"checksum": chk, "data" : [str(response.status),str(data)]}
+		else:
+			entry = { "data" : [str(response.status),str(data)]}
 		logger.info("Request answer: %s" % data)
 	except Exception,e:
 		conn.close()
-		entry = {"checksum": chk, "data" : [str("404"),str(e.strerror)]}
-
+		if chk:
+			entry = {"checksum": chk, "data" : [str("404"),str(e.strerror)]}
+		else:
+			entry = {"data" : [str("404"),str(e.strerror)]}
+			
 	socket_queue.put(entry)
 
 def signal_handler(signum, frame):
@@ -138,6 +144,30 @@ while shd["loop"] :
 				method = "GET"
 
 			http_request(url, method, data, chk)
+
+		if entry['type'] == "out":
+
+			url = str(entry['data'][0])
+			if not url:
+				logger.warning("Missing stream param, dropping message")
+				continue
+
+			data = str(entry['data'][1])
+			if not data:
+				logger.warning("Missing data param, dropping message")
+				continue
+			logger.debug("Data: %s" % data)
+
+			if (len(entry['data']) > 2):
+				method = str(entry['data'][2])
+				if not method:
+					logger.warning("Missing method param, dropping message")
+					continue
+				logger.debug("Key: %s" % method)
+			else:
+				method = "GET"
+
+			http_request(url, method, data, 0)
 
 		else:
 			continue

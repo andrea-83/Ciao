@@ -104,6 +104,7 @@ class CiaoConnector(object):
 
 	# put element (hash) identified by "checksum" into stash "destination"
 	# type: out|result|response
+	
 	def stash_put(self, destination, checksum, element):
 		if destination == "result":
 			if checksum in self.stash:
@@ -114,7 +115,6 @@ class CiaoConnector(object):
 			self.stash[checksum] = element
 			self.fifo[destination].append(checksum)
 		return
-
 	def has_result(self, checksum):
 		return checksum in self.stash and "result" in self.stash[checksum]
 

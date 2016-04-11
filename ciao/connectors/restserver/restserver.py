@@ -108,6 +108,7 @@ try:
 	HOST = shd["conf"]["params"]["host"]   
 	PORT = shd["conf"]["params"]["port"] # Luci port
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	s.settimeout(10)
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 	try:
 		s.bind((HOST, PORT))
